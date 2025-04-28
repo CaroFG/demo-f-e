@@ -1,103 +1,404 @@
-import Image from "next/image";
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { ContactCard } from "@/components/ContactCard"
+import { CompanyCard } from "@/components/CompanyCard"
+import { searchContacts, getFacets, searchFacetValues, multisearch } from "@/lib/search"
+import { X } from "lucide-react"
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [query, setQuery] = useState('')
+  const [filters, setFilters] = useState({
+    jobTitle: [],
+    location: [],
+    industry: [],
+    companyLocationRegion: [],
+    companyLocationLocality: [],
+    companyLocationCountry: [],
+  })
+  const [results, setResults] = useState(null)
+  const [facets, setFacets] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [facetSearch, setFacetSearch] = useState({
+    jobTitle: '',
+    location: '',
+    industry: '',
+    companyLocationRegion: '',
+    companyLocationLocality: '',
+    companyLocationCountry: '',
+  })
+  const [facetResults, setFacetResults] = useState({
+    jobTitle: [],
+    location: [],
+    industry: [],
+    companyLocationRegion: [],
+    companyLocationLocality: [],
+    companyLocationCountry: [],
+  })
+  const [showSuggestions, setShowSuggestions] = useState({
+    jobTitle: false,
+    location: false,
+    industry: false,
+    companyLocationRegion: false,
+    companyLocationLocality: false,
+    companyLocationCountry: false,
+  })
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    const fetchFacets = async () => {
+      const data = await getFacets()
+      setFacets(data)
+    }
+    fetchFacets()
+  }, [])
+
+  const performSearch = useCallback(async () => {
+    setLoading(true)
+    try {
+      const response = await multisearch({ 
+        query, 
+        filters 
+      })
+      setResults(response)
+    } catch (error) {
+      console.error('Search error:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [query, filters])
+
+  // Search for facet values when facet search query changes
+  useEffect(() => {
+    const searchFacets = async () => {
+      const facetNames = {
+        jobTitle: 'worksFor.jobTitle',
+        location: 'address.addressLocality',
+        industry: 'worksFor.company.industry',
+        companyLocationRegion: 'worksFor.company.address.addressRegion',
+        companyLocationLocality: 'worksFor.company.address.addressLocality',
+        companyLocationCountry: 'worksFor.company.address.addressCountry',
+      }
+
+      const results = {}
+      for (const [key, value] of Object.entries(facetSearch)) {
+        if (value) {
+          const response = await searchFacetValues({
+            facetName: facetNames[key],
+            facetQuery: value,
+            filters,
+          })
+          results[key] = response.facetHits
+        } else {
+          results[key] = []
+        }
+      }
+      setFacetResults(results)
+    }
+
+    searchFacets()
+  }, [facetSearch, filters])
+
+  // Trigger search when query or filters change
+  useEffect(() => {
+    performSearch()
+  }, [performSearch])
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => {
+      const currentValues = prev[key] || []
+      const newValues = currentValues.includes(value)
+        ? currentValues.filter(v => v !== value) // Remove if already selected
+        : [...currentValues, value] // Add if not selected
+      
+      return {
+        ...prev,
+        [key]: newValues
+      }
+    })
+    setShowSuggestions({...showSuggestions, [key]: false})
+    setFacetSearch(prev => ({...prev, [key]: ''})) // Clear the filter search bar
+  }
+
+  return (
+    <div className="container mx-auto p-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Search and Filters Section */}
+        <div className="md:col-span-1 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Search</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Input 
+                  placeholder="Search contacts and companies..." 
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Filter contacts</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Selected Filters */}
+              {Object.entries(filters).some(([_, values]) => 
+                (Array.isArray(values) ? values.length > 0 : values)
+              ) && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Selected Filters</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(filters).map(([key, values]) => {
+                      if (!values || (Array.isArray(values) && !values.length)) return null;
+                      
+                      return values.map((value, index) => (
+                        <div
+                          key={`${key}-${value}-${index}`}
+                          className="flex items-center gap-1 rounded-full bg-secondary px-3 py-1 text-sm"
+                        >
+                          <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}: {value}</span>
+                          <button
+                            onClick={() => handleFilterChange(key, value)}
+                            className="ml-1 rounded-full p-0.5 hover:bg-accent"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ));
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Job Title Filter */}
+              <div className="relative">
+                <h3 className="text-sm font-medium mb-2">Job Title</h3>
+                <Input
+                  placeholder="Search job titles..."
+                  value={facetSearch.jobTitle || ''}
+                  onChange={(e) => {
+                    setFacetSearch({...facetSearch, jobTitle: e.target.value})
+                    setShowSuggestions({...showSuggestions, jobTitle: true})
+                  }}
+                  onFocus={() => setShowSuggestions({...showSuggestions, jobTitle: true})}
+                />
+                {showSuggestions.jobTitle && facetResults.jobTitle.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md">
+                    {facetResults.jobTitle.map((job) => (
+                      <div
+                        key={job.value}
+                        className={`px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer ${
+                          filters.jobTitle.includes(job.value) ? 'bg-accent/50' : ''
+                        }`}
+                        onClick={() => handleFilterChange('jobTitle', job.value)}
+                      >
+                        {job.value}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Location Filter */}
+              <div className="relative">
+                <h3 className="text-sm font-medium mb-2">Location</h3>
+                <Input
+                  placeholder="Search locations..."
+                  value={facetSearch.location || ''}
+                  onChange={(e) => {
+                    setFacetSearch({...facetSearch, location: e.target.value})
+                    setShowSuggestions({...showSuggestions, location: true})
+                  }}
+                  onFocus={() => setShowSuggestions({...showSuggestions, location: true})}
+                />
+                {showSuggestions.location && facetResults.location.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md">
+                    {facetResults.location.map((location) => (
+                      <div
+                        key={location.value}
+                        className={`px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer ${
+                          filters.location.includes(location.value) ? 'bg-accent/50' : ''
+                        }`}
+                        onClick={() => handleFilterChange('location', location.value)}
+                      >
+                        {location.value}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Industry Filter */}
+              <div className="relative">
+                <h3 className="text-sm font-medium mb-2">Industry</h3>
+                <Input
+                  placeholder="Search industries..."
+                  value={facetSearch.industry || ''}
+                  onChange={(e) => {
+                    setFacetSearch({...facetSearch, industry: e.target.value})
+                    setShowSuggestions({...showSuggestions, industry: true})
+                  }}
+                  onFocus={() => setShowSuggestions({...showSuggestions, industry: true})}
+                />
+                {showSuggestions.industry && facetResults.industry.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md">
+                    {facetResults.industry.map((industry) => (
+                      <div
+                        key={industry.value}
+                        className={`px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer ${
+                          filters.industry.includes(industry.value) ? 'bg-accent/50' : ''
+                        }`}
+                        onClick={() => handleFilterChange('industry', industry.value)}
+                      >
+                        {industry.value}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Company Location Locality Filter */}
+              <div className="relative">
+                <h3 className="text-sm font-medium mb-2">Company Locality</h3>
+                <Input
+                  placeholder="Search company localities..."
+                  value={facetSearch.companyLocationLocality || ''}
+                  onChange={(e) => {
+                    setFacetSearch({...facetSearch, companyLocationLocality: e.target.value})
+                    setShowSuggestions({...showSuggestions, companyLocationLocality: true})
+                  }}
+                  onFocus={() => setShowSuggestions({...showSuggestions, companyLocationLocality: true})}
+                />
+                {showSuggestions.companyLocationLocality && facetResults.companyLocationLocality.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md">
+                    {facetResults.companyLocationLocality.map((location) => (
+                      <div
+                        key={location.value}
+                        className={`px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer ${
+                          filters.companyLocationLocality.includes(location.value) ? 'bg-accent/50' : ''
+                        }`}
+                        onClick={() => handleFilterChange('companyLocationLocality', location.value)}
+                      >
+                        {location.value}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Company Location Region Filter */}
+              <div className="relative">
+                <h3 className="text-sm font-medium mb-2">Company Region</h3>
+                <Input
+                  placeholder="Search company regions..."
+                  value={facetSearch.companyLocationRegion || ''}
+                  onChange={(e) => {
+                    setFacetSearch({...facetSearch, companyLocationRegion: e.target.value})
+                    setShowSuggestions({...showSuggestions, companyLocationRegion: true})
+                  }}
+                  onFocus={() => setShowSuggestions({...showSuggestions, companyLocationRegion: true})}
+                />
+                {showSuggestions.companyLocationRegion && facetResults.companyLocationRegion.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md">
+                    {facetResults.companyLocationRegion.map((location) => (
+                      <div
+                        key={location.value}
+                        className={`px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer ${
+                          filters.companyLocationRegion.includes(location.value) ? 'bg-accent/50' : ''
+                        }`}
+                        onClick={() => handleFilterChange('companyLocationRegion', location.value)}
+                      >
+                        {location.value}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Company Location Country Filter */}
+              <div className="relative">
+                <h3 className="text-sm font-medium mb-2">Company Country</h3>
+                <Input
+                  placeholder="Search company countries..."
+                  value={facetSearch.companyLocationCountry || ''}
+                  onChange={(e) => {
+                    setFacetSearch({...facetSearch, companyLocationCountry: e.target.value})
+                    setShowSuggestions({...showSuggestions, companyLocationCountry: true})
+                  }}
+                  onFocus={() => setShowSuggestions({...showSuggestions, companyLocationCountry: true})}
+                />
+                {showSuggestions.companyLocationCountry && facetResults.companyLocationCountry.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md">
+                    {facetResults.companyLocationCountry.map((country) => (
+                      <div
+                        key={country.value}
+                        className={`px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer ${
+                          filters.companyLocationCountry.includes(country.value) ? 'bg-accent/50' : ''
+                        }`}
+                        onClick={() => handleFilterChange('companyLocationCountry', country.value)}
+                      >
+                        {country.value}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* Results Section */}
+        <div className="md:col-span-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Results</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {loading ? (
+                  <p className="text-center text-muted-foreground">Searching...</p>
+                ) : (
+                  <>
+                    {/* Contacts Section */}
+                    {results?.contacts?.hits?.length > 0 && (
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Contacts</h3>
+                        {results.contacts.hits.map((contact) => (
+                          <ContactCard key={contact._id} contact={contact} />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Companies Section */}
+                    {results?.companies?.hits?.length > 0 && (
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Companies</h3>
+                        {results.companies.hits.map((company) => (
+                          <CompanyCard key={company._id} company={company} />
+                        ))}
+                      </div>
+                    )}
+
+                    {(!results?.contacts?.hits?.length && !results?.companies?.hits?.length) && (
+                      <p className="text-center text-muted-foreground">
+                        {results ? 'No results found' : 'Start searching to see results'}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
-  );
+  )
 }
